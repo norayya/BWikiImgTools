@@ -13,7 +13,7 @@ class Recoder
     {
         if (args.Length < 1)
         {
-            Console.WriteLine("Usage: ~.exe <mode> <input-file>[] ");
+            Console.WriteLine("Usage: ~.exe <mode> <input-file>[]");
             return;
         }
         
@@ -44,7 +44,7 @@ class Recoder
             string filename = Path.GetFileName(x);
             var fi = new FileInfo(x);
             
-            Console.WriteLine("☆ = = = = = = = = ");
+            Console.WriteLine("☆ = = = = = = = =");
             Console.WriteLine($"Now processing file {fi.Name}");
             
             Stopwatch sw = Stopwatch.StartNew();
@@ -64,7 +64,7 @@ class Recoder
 
                 Console.WriteLine($"[{filename}], {Math.Round((decimal)fi.Length/1024/1024, 2)} MB, CPY");
                 sw.Stop();
-                Console.WriteLine($"★ Success. {sw.ElapsedMilliseconds}ms = = = = ");
+                Console.WriteLine($"★ Success. {sw.ElapsedMilliseconds}ms = = = =\r\n");
                 
                 continue;
                 
@@ -79,7 +79,6 @@ class Recoder
                 {
                     filename = $"{Path.GetFileNameWithoutExtension(x)}{ext}";
                     var targetFilename = genFilename(targetPath, filename);
- 
                     File.WriteAllBytes(targetFilename, encodedImg);
                     Console.WriteLine(
                         $"[{filename}], {Math.Round((decimal)fi.Length / 1024 / 1024, 2)} MB, CPS1");
@@ -89,24 +88,23 @@ class Recoder
 
                     var result = Compress(sourceMat, ext,
                         new CvSize() { Width = sourceMat.Width / STEPPING, Height = sourceMat.Height / STEPPING });
-                    var targetFilename = genFilename(targetPath, filename);
                     filename = $"{Path.GetFileNameWithoutExtension(x)}{ext}";
-                    File.WriteAllBytes(genFilename(targetPath, filename), result);
+                    var targetFilename = genFilename(targetPath, filename);
+                    File.WriteAllBytes(targetFilename, result);
                     Console.WriteLine(
                         $"[{filename}], {Math.Round((decimal)fi.Length / 1024 / 1024, 2)} MB, CPS2");
                 }
                 sw.Stop();
-                Console.WriteLine($"★ Success. {sw.ElapsedMilliseconds}ms = = = = ");
+                Console.WriteLine($"★ Success. {sw.ElapsedMilliseconds}ms = = = =\r\n");
 
                 sourceMat.Dispose();
             }
             catch (Exception e)
             {
-                Console.WriteLine($"Cv2 Error: {e.Message}");
-                Console.WriteLine();
+                Console.WriteLine($"Cv2 Error: {e.Message}\r\n");
+
             }
-            
-            Console.WriteLine();
+
         }
         
         Console.WriteLine($"Over...");
@@ -133,5 +131,5 @@ class Recoder
         src.Dispose();
         return Compress(newMat, ext, s);
     }
-    
+
 }
