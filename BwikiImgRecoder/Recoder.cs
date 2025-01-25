@@ -1,135 +1,204 @@
 ﻿using System.Diagnostics;
-using System.Numerics;
 using OpenCvSharp;
 using CvSize = OpenCvSharp.Size;
+using System.CommandLine;
 
-namespace BwikiImgRecoder;
 
-class Recoder
+namespace BWikiImgReCoder;
+
+internal static class ReCoder
 {
-    private static readonly BigInteger MAX_LENGTH = new BigInteger(1024 * 1024) * 8;
-    private static readonly int STEPPING = 20;
-    static void Main(string[] args)
+    static async Task<int> Main(string[] args)
     {
-        if (args.Length < 1)
+        var rootCmd = new RootCommand();
+
+        var subCmdCompress = new Func<Command>(() =>
         {
-            Console.WriteLine("Usage: ~.exe <mode> <input-file>[]");
-            return;
-        }
+            var subCmd = new Command("compress", "Compress the image by resize and changing format.");
+            var inputs = new Option<string[]>(["--inputs", "-i"], "The input image files.")
+            {
+                Arity = ArgumentArity.OneOrMore,
+                AllowMultipleArgumentsPerToken = true
+            };
+            var output = new Option<string>(["--output", "-o"], () => Path.Combine([ AppDomain.CurrentDomain.BaseDirectory ,"Outputs", $"Result_{DateTime.Now:yyyy-mm-dd-HH-MM-ss}"]),
+                "The output image path.");
+            var format = new Option<int>(["--format", "-f"], () => 1, "The output image format. [PNG:0, JPEG:1].");
+            var length = new Option<decimal>(["--length", "-l"], () => 8, "Length limit for the output image, MB, [Default: 8]");
+            var depth = new Option<int>(["--depth", "-d"], () => 50, "Depth limit for the compression, [Default: 50]");
+            var stepping = new Option<int>(["--stepping", "-s"], () => 50, "Resize stepping. [Default: 50]");
+            var force = new Option<bool>(["--force"], () => false, "If the file size before compression is smaller than the length limit, the compression will also forced.");
+                
+            subCmd.AddOption(inputs);
+            subCmd.AddOption(output);
+            subCmd.AddOption(format);
+            subCmd.AddOption(length);
+            subCmd.AddOption(depth);
+            subCmd.AddOption(stepping);
+            subCmd.AddOption(force);
         
-        string ext = args[0] switch
+            subCmd.SetHandler(Compress, inputs, output, format, length, depth, stepping, force);
+            
+            return subCmd;
+        }).Invoke();
+        
+        rootCmd.Add(subCmdCompress);
+        
+        return await rootCmd.InvokeAsync(args);
+    }
+
+    static void PrintConsoleColorText(string text, ConsoleColor color)
+    {
+        Console.ForegroundColor = color;
+        Console.WriteLine(text);
+        Console.ResetColor();
+    }
+
+    static async Task<int> Compress(string[] inputs, string output, int format, decimal length, int depth, int stepping, bool force)
+    {
+        if (!Enum.IsDefined(typeof(Format), format))
         {
-            "0" => ".png",
-            "1" => ".jpg",
-            _ => throw new ArgumentException("Invalid argument, only 0 and 1 are supported.")
+            PrintConsoleColorText($"Invalid format: {format}", ConsoleColor.Red);
+            return 1;
+        }
+
+        if (!Path.IsPathFullyQualified(output))
+        {
+            PrintConsoleColorText($"Invalid output path: {output}", ConsoleColor.Red);
+            return 2;
+        }
+
+        foreach (var input in inputs)
+        {
+            if (File.Exists(input)) continue;
+            PrintConsoleColorText($"File {input} does not exist", ConsoleColor.Red);
+            return 3;
+        }
+
+        var outputFormat = (Format)format switch
+        {
+            Format.PNG => ".png",
+            Format.JPEG => ".jpg",
+            _ => throw new ArgumentException($"Invalid format: {format}"),
         };
         
-        List<string> fileList = new();
-        for (int i = 1; i <= args.Length - 1; i++)
+        if (!Path.Exists(output))
+            Directory.CreateDirectory(output);
+        var max_length = (long)Math.Ceiling((1024 * 1024) * length);
+
+        var index = 0;
+        // start 
+        foreach (var input in inputs)
         {
-            if (!File.Exists(args[i]))
-            {
-                throw new FileNotFoundException("File not found", args[i]);
-            }
-            fileList.Add(args[i]);
-        }
-        
-        string targetPath = Directory.CreateDirectory($"Result_{DateTime.Now:yyyy-dd-M--HH-mm-ss}").FullName;
-        var genFilename = (string targetDic ,string filename) => Path.Combine($"{targetDic}", $"{DateTime.Now:yyyy-dd-M--HH-mm-ss}_{filename}");
-        Console.WriteLine($"Start...");
-        Console.WriteLine($"Output file path: {targetPath}");
-        
-        foreach (var x in fileList)
-        {
-            string filename = Path.GetFileName(x);
-            var fi = new FileInfo(x);
-            
-            Console.WriteLine("☆ = = = = = = = =");
-            Console.WriteLine($"Now processing file {fi.Name}");
-            
             Stopwatch sw = Stopwatch.StartNew();
+            var fileInfo = new FileInfo(input);
             
-            if (fi.Length <= MAX_LENGTH)
+            PrintConsoleColorText($"Now Compressing: {fileInfo.Name}", ConsoleColor.Yellow);
+            if (!force && fileInfo.Length < max_length)
             {
-                var targetFilename = genFilename(targetPath, filename);
+                var filename = Path.Combine(output, $"{index}_{Path.GetFileNameWithoutExtension(input)}{outputFormat}");
                 try
                 {
-                    File.Copy(x, targetFilename, true);
+                    File.Copy(input, filename, overwrite: true);
                 }
-                catch (Exception e)
+                catch (Exception ex)
                 {
-                    Console.WriteLine($"Failed to copy file {x} to {targetFilename}: {e.Message}");
+                    PrintConsoleColorText($"Failed to copy {input} to {filename}: {ex.Message}", ConsoleColor.Red);
+                    sw.Stop();
+                    index += 1;
                     continue;
                 }
 
-                Console.WriteLine($"[{filename}], {Math.Round((decimal)fi.Length/1024/1024, 2)} MB, CPY");
                 sw.Stop();
-                Console.WriteLine($"★ Success. {sw.ElapsedMilliseconds}ms = = = =\r\n");
-                
+                PrintConsoleColorText($"Copy {input} to {filename}, took {sw.ElapsedMilliseconds}ms", ConsoleColor.Green);
+                index += 1;
                 continue;
-                
             }
-
+            
             try
             {
-                var sourceMat = Cv2.ImRead(x);
-                Cv2.ImEncode(ext, sourceMat, out byte[] encodedImg);
-
-                if (encodedImg.Length <= MAX_LENGTH)
+                var filename = $"{index}_{Path.GetFileNameWithoutExtension(input)}{outputFormat}";
+                
+                var raw = Cv2.ImRead(input);
+                Cv2.ImEncode(outputFormat, raw, out var cpsBuff);
+                
+                if (cpsBuff.Length <= max_length)
                 {
-                    filename = $"{Path.GetFileNameWithoutExtension(x)}{ext}";
-                    var targetFilename = genFilename(targetPath, filename);
-                    File.WriteAllBytes(targetFilename, encodedImg);
-                    Console.WriteLine(
-                        $"[{filename}], {Math.Round((decimal)fi.Length / 1024 / 1024, 2)} MB, CPS1");
+                    await File.WriteAllBytesAsync(Path.Combine(output, filename), cpsBuff);
                 }
                 else
                 {
+                    var cpsResult = cps(raw, outputFormat, new CvSize()
+                    {
+                        Width = raw.Width / stepping,
+                        Height = raw.Height / stepping,
+                    }, max_length, depth);
 
-                    var result = Compress(sourceMat, ext,
-                        new CvSize() { Width = sourceMat.Width / STEPPING, Height = sourceMat.Height / STEPPING });
-                    filename = $"{Path.GetFileNameWithoutExtension(x)}{ext}";
-                    var targetFilename = genFilename(targetPath, filename);
-                    File.WriteAllBytes(targetFilename, result);
-                    Console.WriteLine(
-                        $"[{filename}], {Math.Round((decimal)fi.Length / 1024 / 1024, 2)} MB, CPS2");
+                    if (cpsResult is null)
+                    {
+                        sw.Stop();
+                        PrintConsoleColorText($"Failed, depth limit.", ConsoleColor.Red);
+                        index += 1;
+                        raw.Dispose();
+                        continue;
+                    }
+                    
+                    await File.WriteAllBytesAsync(Path.Combine(output, filename), cpsResult);
                 }
+
                 sw.Stop();
-                Console.WriteLine($"★ Success. {sw.ElapsedMilliseconds}ms = = = =\r\n");
-
-                sourceMat.Dispose();
+                PrintConsoleColorText($"Wrote {filename}, took {sw.ElapsedMilliseconds}ms", ConsoleColor.Green);
+                index += 1;
+                raw.Dispose();
             }
-            catch (Exception e)
+            catch (Exception ex)
             {
-                Console.WriteLine($"Cv2 Error: {e.Message}\r\n");
-
+                PrintConsoleColorText($"Failed to copy {input} to {output}: {ex.Message}", ConsoleColor.Red);
+                sw.Stop();
+                index += 1;
             }
 
         }
         
-        Console.WriteLine($"Over...");
+        PrintConsoleColorText($"Output: {output}, Task completed, Exit.", ConsoleColor.Cyan);
+        return 0;
     }
 
-    static byte[] Compress(Mat src, string ext, CvSize s)
+    private enum Format
     {
+        PNG = 0,
+        JPEG = 1,
+    }
+    
+
+    static byte[]? cps(Mat src, string ext, CvSize s, long max_length, int max_depth, int depth = 0)
+    {
+        if (depth >= max_depth)
+        {
+            return null;
+        }
+        
+        #if DEBUG
+            Console.WriteLine($"depth: {depth}, {src.Width}x{src.Height} , CvSize: {s.Width} x {s.Height}");
+        #endif
+        
         Cv2.ImEncode(ext, src, out byte[] encodedImg);
-        if (encodedImg.Length <= MAX_LENGTH)
+        if (encodedImg.Length <= max_length)
         {
             return encodedImg;
         }
         
         Mat newMat = new Mat();
-        if (encodedImg.Length >= MAX_LENGTH * 2)
+        if (encodedImg.Length >= max_length * 2)
         {
 
             Cv2.Resize(src, newMat, new CvSize(src.Width*0.75, src.Height*0.75));
             src.Dispose();
-            return Compress(newMat, ext, s);
+            return cps(newMat, ext, s, max_length, max_depth, depth + 1);
         }
         
         Cv2.Resize(src, newMat, new CvSize(src.Width - s.Width, src.Height - s.Height));
         src.Dispose();
-        return Compress(newMat, ext, s);
+        return cps(newMat, ext, s, max_length, max_depth, depth + 1);
     }
 
 }
