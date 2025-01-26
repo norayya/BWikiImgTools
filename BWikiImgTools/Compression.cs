@@ -6,54 +6,51 @@ using System.CommandLine;
 
 namespace BWikiImgTools;
 
-internal static class ReCoder
+internal static class Compression
 {
-    static async Task<int> Main(string[] args)
+    public static readonly Func<Command> Compress = () =>
     {
-        var rootCmd = new RootCommand();
-
-        var subCmdCompress = new Func<Command>(() =>
+        var subCmd = new Command("compress", "Compress the image by resize and changing format.");
+        var inputs = new Option<string[]>(["--inputs", "-i"], "The input image files.")
         {
-            var subCmd = new Command("compress", "Compress the image by resize and changing format.");
-            var inputs = new Option<string[]>(["--inputs", "-i"], "The input image files.")
-            {
-                Arity = ArgumentArity.OneOrMore,
-                AllowMultipleArgumentsPerToken = true
-            };
-            var output = new Option<string>(["--output", "-o"], () => Path.Combine([ AppDomain.CurrentDomain.BaseDirectory ,"Outputs", $"Result_{DateTime.Now:yyyy-mm-dd-HH-MM-ss}"]),
-                "The output image path.");
-            var format = new Option<int>(["--format", "-f"], () => 1, "The output image format. [PNG:0, JPEG:1].");
-            var length = new Option<decimal>(["--length", "-l"], () => 8, "Length limit for the output image, MB, [Default: 8]");
-            var depth = new Option<int>(["--depth", "-d"], () => 50, "Depth limit for the compression, [Default: 50]");
-            var stepping = new Option<int>(["--stepping", "-s"], () => 50, "Resize stepping. [Default: 50]");
-            var force = new Option<bool>(["--force"], () => false, "If the file size before compression is smaller than the length limit, the compression will also forced.");
-                
-            subCmd.AddOption(inputs);
-            subCmd.AddOption(output);
-            subCmd.AddOption(format);
-            subCmd.AddOption(length);
-            subCmd.AddOption(depth);
-            subCmd.AddOption(stepping);
-            subCmd.AddOption(force);
-        
-            subCmd.SetHandler(Compress, inputs, output, format, length, depth, stepping, force);
-            
-            return subCmd;
-        }).Invoke();
-        
-        rootCmd.Add(subCmdCompress);
-        
-        return await rootCmd.InvokeAsync(args);
-    }
+            Arity = ArgumentArity.OneOrMore,
+            AllowMultipleArgumentsPerToken = true
+        };
+        var output = new Option<string>(["--output", "-o"],
+            () => Path.Combine([
+                AppDomain.CurrentDomain.BaseDirectory, "Outputs", $"Result_{DateTime.Now:yyyy-mm-dd-HH-MM-ss}"
+            ]),
+            "The output image path.");
+        var format = new Option<int>(["--format", "-f"], () => 1, "The output image format. [PNG:0, JPEG:1].");
+        var length = new Option<decimal>(["--length", "-l"], () => 8,
+            "Length limit for the output image, MB, [Default: 8]");
+        var depth = new Option<int>(["--depth", "-d"], () => 50, "Depth limit for the compression, [Default: 50]");
+        var stepping = new Option<int>(["--stepping", "-s"], () => 50, "Resize stepping. [Default: 50]");
+        var force = new Option<bool>(["--force"], () => false,
+            "If the file size before compression is smaller than the length limit, the compression will also forced.");
 
-    static void PrintConsoleColorText(string text, ConsoleColor color)
+        subCmd.AddOption(inputs);
+        subCmd.AddOption(output);
+        subCmd.AddOption(format);
+        subCmd.AddOption(length);
+        subCmd.AddOption(depth);
+        subCmd.AddOption(stepping);
+        subCmd.AddOption(force);
+
+        subCmd.SetHandler(Handler, inputs, output, format, length, depth, stepping, force);
+        
+        return subCmd;
+    };
+
+
+    private static void PrintConsoleColorText(string text, ConsoleColor color)
     {
         Console.ForegroundColor = color;
         Console.WriteLine(text);
         Console.ResetColor();
     }
 
-    static async Task<int> Compress(string[] inputs, string output, int format, decimal length, int depth, int stepping, bool force)
+    private static async Task<int> Handler(string[] inputs, string output, int format, decimal length, int depth, int stepping, bool force)
     {
         if (!Enum.IsDefined(typeof(Format), format))
         {
@@ -67,11 +64,17 @@ internal static class ReCoder
             return 2;
         }
 
+        if (inputs.Length == 0)
+        {
+            PrintConsoleColorText($"No inputs specified.", ConsoleColor.Red);
+            return 3;
+        }
+        
         foreach (var input in inputs)
         {
             if (File.Exists(input)) continue;
             PrintConsoleColorText($"File {input} does not exist", ConsoleColor.Red);
-            return 3;
+            return 4;
         }
 
         var outputFormat = (Format)format switch
@@ -83,6 +86,7 @@ internal static class ReCoder
         
         if (!Path.Exists(output))
             Directory.CreateDirectory(output);
+        
         var max_length = (long)Math.Ceiling((1024 * 1024) * length);
 
         var index = 0;
@@ -168,9 +172,9 @@ internal static class ReCoder
         PNG = 0,
         JPEG = 1,
     }
-    
 
-    static byte[]? cps(Mat src, string ext, CvSize s, long max_length, int max_depth, int depth = 0)
+
+    private static byte[]? cps(Mat src, string ext, CvSize s, long max_length, int max_depth, int depth = 0)
     {
         if (depth >= max_depth)
         {
