@@ -1,6 +1,6 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BwikiImgRecoder", "BwikiImgRecoder\BwikiImgRecoder.csproj", "{1E727FB2-4D70-4C59-9B07-8964999D0465}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BWikiImgTools", "BWikiImgTools\BWikiImgTools.csproj", "{1E727FB2-4D70-4C59-9B07-8964999D0465}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

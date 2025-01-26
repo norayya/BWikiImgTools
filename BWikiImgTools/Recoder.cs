@@ -4,7 +4,7 @@ using CvSize = OpenCvSharp.Size;
 using System.CommandLine;
 
 
-namespace BWikiImgReCoder;
+namespace BWikiImgTools;
 
 internal static class ReCoder
 {

@@ -1,9 +1,9 @@
-# BWikiImgRecoder
+# BWikiImgTools
 
 ### 使用说明
 
 ``
-.\BWikiImgRecoder compress -i [源文件路径] -o [输出路径] -f [输出格式] -l [大小限制(MB)] -d [递归深度限制] -s [压缩步进] --force [强制压缩]
+.\BWikiImgTools.exe compress -i [源文件路径] -o [输出路径] -f [输出格式] -l [大小限制(MB)] -d [递归深度限制] -s [压缩步进] --force [强制压缩]
 ``
 
 必选参数:
@@ -27,9 +27,9 @@
 #### 示例
 
 ``
-.\BWikiImgRecoder compress -i D:\1.png F:\2.png -o F:\out 
+.\BWikiImgTools.exe compress -i D:\1.png F:\2.png -o F:\out 
 ``
 
 ``
-.\BWikiImgRecoder compress -i D:\1.png F:\2.png -o F:\out -l 10 -d 50 -s 20 --force
+.\BWikiImgTools.exe compress -i D:\1.png F:\2.png -o F:\out -l 10 -d 50 -s 20 --force
 ``
